@@ -1,0 +1,1 @@
+adafruit-circuitpython-hid>=6.0.0 
