@@ -98,38 +98,73 @@ if PRINT_DEBUG:
     print("- Menu Button: P (opens stratagem menu)")
     print("- Four direction buttons: Arrow keys (for manual stratagem input)")
 
+# Wait for stable button reading
+time.sleep(0.5)  # Increased delay for stability
+
+# Boot mode detection
+sos_mode = not up_btn.value  # SOS mode if UP held at boot
+default_menu_key = Keycode.P
+practice_mode = not menu_btn.value  # Practice mode if MENU held at boot
+if practice_mode:
+    menu_key = Keycode.R
+else:
+    menu_key = default_menu_key
+
+if PRINT_DEBUG:
+    if sos_mode:
+        print("SOS Mode activated - Emergency sequence available!")
+    if practice_mode:
+        print("Practice Mode activated - Menu button sends 'R' instead of 'P'")
+
+# Update buttons list with correct menu key
+buttons = [
+    {"button": menu_btn, "keycode": menu_key, "state": True, "last_press_time": 0},
+    {"button": up_btn, "keycode": KEY_CONFIG["UP_KEY"], "state": True, "last_press_time": 0},
+    {"button": down_btn, "keycode": KEY_CONFIG["DOWN_KEY"], "state": True, "last_press_time": 0},
+    {"button": left_btn, "keycode": KEY_CONFIG["LEFT_KEY"], "state": True, "last_press_time": 0},
+    {"button": right_btn, "keycode": KEY_CONFIG["RIGHT_KEY"], "state": True, "last_press_time": 0},
+]
+
+# Add a counter for menu button presses
+menu_press_count = 0
+menu_press_time = 0
+MENU_PRESS_TIMEOUT = 1.0  # Time window in seconds for three presses
+
 while True:
     # Check each button
     for btn_data in buttons:
-        # Buttons are pulled up, so they read True when not pressed
-        # and False when pressed
         current_state = btn_data["button"].value
-        
-        # If button state changed from not pressed to pressed
         if current_state == False and btn_data["state"] == True:
             current_time = time.monotonic()
-            
-            # Debounce check
             if current_time - btn_data["last_press_time"] > DEBOUNCE_TIME:
                 if PRINT_DEBUG:
                     print(f"Button pressed: {btn_data['keycode']}")
-                
-                # Flash LED when button is pressed
                 set_led(True)
-                
-                # Send keypress
                 kbd.press(btn_data["keycode"])
-                time.sleep(0.01)  # Short delay for the key to register
+                time.sleep(0.01)
                 kbd.release(btn_data["keycode"])
-                
-                # Update last press time for debouncing
                 btn_data["last_press_time"] = current_time
-                
-                # Turn off LED
                 set_led(False)
-                
-        # Update button state
+                # Check if menu button was pressed
+                if btn_data["button"] == menu_btn:
+                    if current_time - menu_press_time > MENU_PRESS_TIMEOUT:
+                        menu_press_count = 1
+                    else:
+                        menu_press_count += 1
+                    menu_press_time = current_time
+                    if menu_press_count >= 3:
+                        if sos_mode:  # Only trigger SOS sequence if SOS mode was activated at boot
+                            if PRINT_DEBUG:
+                                print("SOS macro triggered - Menu button pressed three times")
+                            # Ensure the third P is sent before SOS sequence
+                            time.sleep(0.05)
+                            # Send arrow key sequence: up>down>right>left>up
+                            sequence = [Keycode.UP_ARROW, Keycode.DOWN_ARROW, Keycode.RIGHT_ARROW, Keycode.LEFT_ARROW, Keycode.UP_ARROW]
+                            for key in sequence:
+                                kbd.press(key)
+                                time.sleep(0.01)
+                                kbd.release(key)
+                                time.sleep(0.05)
+                        menu_press_count = 0
         btn_data["state"] = current_state
-    
-    # Small delay to avoid excessive CPU usage
     time.sleep(0.01) 
